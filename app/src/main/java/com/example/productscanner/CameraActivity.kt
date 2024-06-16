@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.util.Base64
+import android.util.Log
 import android.widget.Button
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -37,8 +38,8 @@ class CameraActivity : AppCompatActivity() {
     private val REQUEST_CODE_PERMISSIONS = 10
     private val REQUIRED_PERMISSIONS = arrayOf(
         android.Manifest.permission.CAMERA
-//        android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-//        android.Manifest.permission.READ_EXTERNAL_STORAGE
+// android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+// android.Manifest.permission.READ_EXTERNAL_STORAGE
     )
 
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
@@ -127,30 +128,35 @@ class CameraActivity : AppCompatActivity() {
             }
         )
     }
-
-//    private fun uploadPhotoToFirebase(uri: Uri) {
-//        val storageRef = storage.reference.child("images/${uri.lastPathSegment}")
-//        storageRef.putFile(uri)
-//            .addOnSuccessListener {
-//                Toast.makeText(this, "Photo uploaded to firebase storage successfully", Toast.LENGTH_SHORT).show()
-//                storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
-//                    processPhoto(downloadUrl.toString())
-//                }
-//            }
-//            .addOnFailureListener {
-//                Toast.makeText(this, "Upload failed", Toast.LENGTH_SHORT).show()
-//            }
-//    }
+// private fun uploadPhotoToFirebase(uri: Uri) {
+// val storageRef = storage.reference.child("images/${uri.lastPathSegment}")
+// storageRef.putFile(uri)
+// .addOnSuccessListener {
+// Toast.makeText(this, "Photo uploaded to firebase storage successfully", Toast.LENGTH_SHORT).show()
+// storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
+// processPhoto(downloadUrl.toString())
+// }
+// }
+// .addOnFailureListener {
+// Toast.makeText(this, "Upload failed", Toast.LENGTH_SHORT).show()
+// }
+// }
 
     private fun processPhoto(bitmap: Bitmap) {
-        //Convert Bitmap to Base64
+        // Convert Bitmap to Base64
         val baos = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos)
         val imageBytes = baos.toByteArray()
         val base64Image = Base64.encodeToString(imageBytes, Base64.DEFAULT)
-        //Send Base64 image to Gemini service
+        // Create InlineData, Part, Content, and GeminiProRequest objects
+        val inlineData = InlineData(base64Image, "image/jpeg")
+        val part = Part(inlineData, "give me pure and only json response of attached image in format of { product_name : String, description : String, color : String, pattern : String}")
+        val content = Content(listOf(part))
+        val request = GeminiProRequest(listOf(content))
+        // Send Base64 image to Gemini service
         val service = retrofit.create(GeminiProService::class.java)
-        val request = GeminiProRequest(base64Image)
+        // Log the request body
+        Log.d("GeminiRequest", "Sending image to Gemini: ${request}") //
 
         service.processImage(request).enqueue(object : Callback<GeminiProResponse> {
             override fun onResponse(call: Call<GeminiProResponse>, response: Response<GeminiProResponse>) {
