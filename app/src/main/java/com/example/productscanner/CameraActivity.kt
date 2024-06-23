@@ -3,6 +3,7 @@ package com.example.productscanner
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
 import android.os.Bundle
 import android.util.Base64
 import android.util.Log
@@ -59,7 +60,6 @@ class CameraActivity : AppCompatActivity() {
             .baseUrl("https://generativelanguage.googleapis.com/")
             .addConverterFactory(GsonConverterFactory.create())
             .build()
-
         if (allPermissionsGranted()) {
             startCamera()
         } else {
@@ -94,9 +94,7 @@ class CameraActivity : AppCompatActivity() {
             val preview = Preview.Builder().build().also {
                 it.setSurfaceProvider(previewView.surfaceProvider)
             }
-
             imageCapture = ImageCapture.Builder().build()
-
             try {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture)
@@ -112,6 +110,14 @@ class CameraActivity : AppCompatActivity() {
             ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageCapturedCallback() {
                 override fun onCaptureSuccess(image: ImageProxy) {
+                    // Check the format of the captured photo
+                    val format = image.format
+                    Log.d("ImageFormat", "Captured image format: $format")
+                    if (format == ImageFormat.JPEG) {
+                        Log.d("ImageFormat", "Captured image is in JPEG format")
+                    } else {
+                        Log.d("ImageFormat", "Captured image is in a different format: $format")
+                    }
                     // Convert ImageProxy to Bitmap
                     val buffer = image.planes[0].buffer
                     val bytes = ByteArray(buffer.remaining())
@@ -121,7 +127,6 @@ class CameraActivity : AppCompatActivity() {
                     Toast.makeText(this@CameraActivity, "Photo captured successfully", Toast.LENGTH_SHORT).show()
                     image.close()
                 }
-
                 override fun onError(exception: ImageCaptureException) {
                     Toast.makeText(this@CameraActivity, "Photo capture failed: ${exception.message}", Toast.LENGTH_SHORT).show()
                 }
@@ -161,30 +166,34 @@ class CameraActivity : AppCompatActivity() {
         service.processImage(request).enqueue(object : Callback<GeminiProResponse> {
             override fun onResponse(call: Call<GeminiProResponse>, response: Response<GeminiProResponse>) {
                 if (response.isSuccessful) {
-                    val productData = response.body()
-                    if (productData != null) {
-                        saveProductDataToFirestore(productData)
+                    val geminiResponse = response.body()
+                    if (geminiResponse != null) {
+                        saveProductDataToFirestore(geminiResponse)
                     } else {
+                        Log.e("GeminiResponse", "Gemini response body is null") // Log error
                         Toast.makeText(this@CameraActivity, "Gemini response body is null", Toast.LENGTH_SHORT).show()
                     }
                 } else {
+                    Log.e("GeminiResponse", "Gemini request failed with code: ${response.code()}") // Log error with code
                     Toast.makeText(this@CameraActivity, "Gemini request failed: ${response.code()}", Toast.LENGTH_SHORT).show()
                 }
             }
-
             override fun onFailure(call: Call<GeminiProResponse>, t: Throwable) {
+                Log.e("GeminiResponse", "Gemini request failed", t) // Log error with exception
                 Toast.makeText(this@CameraActivity, "Gemini request failed: ${t.message}", Toast.LENGTH_SHORT).show()
             }
         })
     }
 
-    private fun saveProductDataToFirestore(productData: GeminiProResponse) {
-        firestore.collection("products")
-            .add(productData)
-            .addOnSuccessListener {
+    private fun saveProductDataToFirestore(geminiResponse: GeminiProResponse) {
+        val productsCollection = firestore.collection("products")
+        productsCollection.add(geminiResponse)
+            .addOnSuccessListener { documentReference ->
+                Log.d("Firestore", "Gemini response saved with ID: ${documentReference.id}")
                 Toast.makeText(this, "Product data saved", Toast.LENGTH_SHORT).show()
             }
-            .addOnFailureListener {
+            .addOnFailureListener {e->
+                Log.e("Firestore", "Failed to save Gemini response", e)
                 Toast.makeText(this, "Failed to save product data", Toast.LENGTH_SHORT).show()
             }
     }
